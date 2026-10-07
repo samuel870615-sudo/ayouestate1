@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>北北桃預售屋備查即時觀測站</title>
+  <!-- Tailwind CSS & ECharts -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased p-4 md:p-8">
+
+  <!-- Header -->
+  <header class="max-w-7xl mx-auto mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b pb-4">
+    <div>
+      <h1 class="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">北北桃預售屋備查即時觀測站</h1>
+      <p class="text-sm text-slate-500 mt-1">資料來源：內政部實價登錄開放資料（每月定期自動更新）</p>
+    </div>
+    <!-- 縣市切換 Tab -->
+    <div class="inline-flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm" id="cityTabs">
+      <button onclick="switchCity('ALL')" class="city-btn px-4 py-1.5 text-sm font-medium rounded-md bg-blue-600 text-white" data-city="ALL">北北桃全區</button>
+      <button onclick="switchCity('台北市')" class="city-btn px-4 py-1.5 text-sm font-medium rounded-md text-slate-600 hover:text-slate-900" data-city="台北市">台北市</button>
+      <button onclick="switchCity('新北市')" class="city-btn px-4 py-1.5 text-sm font-medium rounded-md text-slate-600 hover:text-slate-900" data-city="新北市">新北市</button>
+      <button onclick="switchCity('桃園市')" class="city-btn px-4 py-1.5 text-sm font-medium rounded-md text-slate-600 hover:text-slate-900" data-city="桃園市">桃園市</button>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto space-y-6">
+    <!-- KPI 數據卡片 -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <span class="text-xs font-medium text-slate-400">總備查案量</span>
+        <div class="text-2xl font-bold text-slate-900 mt-1" id="kpiCases">-</div>
+      </div>
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <span class="text-xs font-medium text-slate-400">總規劃戶數</span>
+        <div class="text-2xl font-bold text-blue-600 mt-1" id="kpiHouseholds">-</div>
+      </div>
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <span class="text-xs font-medium text-slate-400">推案熱區 Top 1</span>
+        <div class="text-2xl font-bold text-emerald-600 mt-1" id="kpiTopTown">-</div>
+      </div>
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <span class="text-xs font-medium text-slate-400">平均單案戶數</span>
+        <div class="text-2xl font-bold text-amber-600 mt-1" id="kpiAvgUnits">-</div>
+      </div>
+    </div>
+
+    <!-- 圖表區塊 -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <h2 class="text-base font-bold text-slate-800 mb-4">熱門行政區推案排行 (Top 10)</h2>
+        <div id="townChart" class="w-full h-72"></div>
+      </div>
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <h2 class="text-base font-bold text-slate-800 mb-4">主力建商（起造人）推案排行</h2>
+        <div id="builderChart" class="w-full h-72"></div>
+      </div>
+    </div>
+
+    <!-- 建案搜尋與列表表格 -->
+    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <h2 class="text-base font-bold text-slate-800">建案列表檢索</h2>
+        <input 
+          type="text" 
+          id="searchInput" 
+          placeholder="搜尋案名、建商、街道或行政區..." 
+          class="w-full md:w-80 px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          oninput="handleSearch()"
+        />
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm text-slate-600">
+          <thead class="bg-slate-50 text-xs text-slate-500 uppercase border-y">
+            <tr>
+              <th class="py-3 px-4">縣市/行政區</th>
+              <th class="py-3 px-4">建案名稱</th>
+              <th class="py-3 px-4">起造人 (建商)</th>
+              <th class="py-3 px-4">戶數</th>
+              <th class="py-3 px-4">使用分區</th>
+              <th class="py-3 px-4">坐落街道</th>
+              <th class="py-3 px-4">建照核發日期</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody" class="divide-y divide-slate-100">
+            <tr><td colspan="7" class="py-8 text-center text-slate-400">資料載入中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let rawData = [];
+    let currentCity = 'ALL';
+    let townChartInstance = null;
+    let builderChartInstance = null;
+
+    async function init() {
+      try {
+        const res = await fetch('./data.json');
+        rawData = await res.json();
+        render();
+      } catch (err) {
+        console.error("載入 data.json 失敗", err);
+        document.getElementById('tableBody').innerHTML = '<tr><td colspan="7" class="py-8 text-center text-red-500">無法讀取 data.json，請確認檔案已產生。</td></tr>';
+      }
+    }
+
+    function switchCity(city) {
+      currentCity = city;
+      document.querySelectorAll('.city-btn').forEach(btn => {
+        if (btn.getAttribute('data-city') === city) {
+          btn.className = "city-btn px-4 py-1.5 text-sm font-medium rounded-md bg-blue-600 text-white";
+        } else {
+          btn.className = "city-btn px-4 py-1.5 text-sm font-medium rounded-md text-slate-600 hover:text-slate-900";
+        }
+      });
+      render();
+    }
+
+    function getFilteredData() {
+      if (currentCity === 'ALL') return rawData;
+      return rawData.filter(d => d.city === currentCity);
+    }
+
+    function render() {
+      const data = getFilteredData();
+
+      // KPI 計算
+      const totalCases = data.length;
+      const totalHouseholds = data.reduce((sum, d) => sum + (Number(d.households) || 0), 0);
+      const avgUnits = totalCases > 0 ? Math.round(totalHouseholds / totalCases) : 0;
+
+      // 行政區統計
+      const townCounts = {};
+      data.forEach(d => {
+        const key = `${d.city || ''} ${d.town}`;
+        townCounts[key] = (townCounts[key] || 0) + 1;
+      });
+      const topTownEntry = Object.entries(townCounts).sort((a,b) => b[1] - a[1])[0];
+      const topTown = topTownEntry ? `${topTownEntry[0]} (${topTownEntry[1]}案)` : '-';
+
+      document.getElementById('kpiCases').textContent = totalCases.toLocaleString() + ' 案';
+      document.getElementById('kpiHouseholds').textContent = totalHouseholds.toLocaleString() + ' 戶';
+      document.getElementById('kpiTopTown').textContent = topTown;
+      document.getElementById('kpiAvgUnits').textContent = avgUnits + ' 戶/案';
+
+      renderCharts(data);
+      renderTable(data.slice(0, 50)); // 預設顯示前 50 筆
+    }
+
+    function renderCharts(data) {
+      if (!townChartInstance) townChartInstance = echarts.init(document.getElementById('townChart'));
+      if (!builderChartInstance) builderChartInstance = echarts.init(document.getElementById('builderChart'));
+
+      // 行政區 Top 10
+      const townMap = {};
+      data.forEach(d => {
+        const key = currentCity === 'ALL' ? `${d.city} ${d.town}` : d.town;
+        townMap[key] = (townMap[key] || 0) + 1;
+      });
+      const sortedTowns = Object.entries(townMap).sort((a,b) => b[1] - a[1]).slice(0, 10).reverse();
+
+      townChartInstance.setOption({
+        grid: { left: '3%', right: '8%', bottom: '3%', top: '3%', containLabel: true },
+        xAxis: { type: 'value' },
+        yAxis: { type: 'category', data: sortedTowns.map(i => i[0]) },
+        series: [{ type: 'bar', data: sortedTowns.map(i => i[1]), itemStyle: { color: '#3b82f6', borderRadius: [0, 4, 4, 0] } }]
+      });
+
+      // 建商 Top 10
+      const builderMap = {};
+      data.forEach(d => {
+        const b = (d.builder || '未提供').split('負責人')[0].replace('股份有限公司', '').replace('有限公司', '');
+        builderMap[b] = (builderMap[b] || 0) + 1;
+      });
+      const sortedBuilders = Object.entries(builderMap).sort((a,b) => b[1] - a[1]).slice(0, 10).reverse();
+
+      builderChartInstance.setOption({
+        grid: { left: '3%', right: '8%', bottom: '3%', top: '3%', containLabel: true },
+        xAxis: { type: 'value' },
+        yAxis: { type: 'category', data: sortedBuilders.map(i => i[0]) },
+        series: [{ type: 'bar', data: sortedBuilders.map(i => i[1]), itemStyle: { color: '#10b981', borderRadius: [0, 4, 4, 0] } }]
+      });
+    }
+
+    function renderTable(list) {
+      const tbody = document.getElementById('tableBody');
+      if (list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-slate-400">無相符資料</td></tr>';
+        return;
+      }
+      tbody.innerHTML = list.map(d => `
+        <tr class="hover:bg-slate-50">
+          <td class="py-3 px-4 font-medium text-slate-900"><span class="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded mr-1">${d.city}</span>${d.town}</td>
+          <td class="py-3 px-4 font-semibold text-blue-600">${d.name}</td>
+          <td class="py-3 px-4 text-xs max-w-[180px] truncate" title="${d.builder}">${d.builder}</td>
+          <td class="py-3 px-4 font-medium">${d.households || '-'}</td>
+          <td class="py-3 px-4 text-xs">${d.zoning || '-'}</td>
+          <td class="py-3 px-4 text-xs text-slate-500 max-w-[200px] truncate" title="${d.location}">${d.location}</td>
+          <td class="py-3 px-4 text-xs text-slate-400">${d.permitDate || '-'}</td>
+        </tr>
+      `).join('');
+    }
+
+    function handleSearch() {
+      const q = document.getElementById('searchInput').value.trim().toLowerCase();
+      const current = getFilteredData();
+      if (!q) {
+        renderTable(current.slice(0, 50));
+        return;
+      }
+      const filtered = current.filter(d => 
+        (d.name && d.name.toLowerCase().includes(q)) ||
+        (d.builder && d.builder.toLowerCase().includes(q)) ||
+        (d.town && d.town.toLowerCase().includes(q)) ||
+        (d.location && d.location.toLowerCase().includes(q))
+      );
+      renderTable(filtered.slice(0, 100));
+    }
+
+    window.addEventListener('resize', () => {
+      if (townChartInstance) townChartInstance.resize();
+      if (builderChartInstance) builderChartInstance.resize();
+    });
+
+    init();
+  </script>
+</body>
+</html>
